@@ -3,24 +3,25 @@
 
 namespace wallaby {
 
-  template<typename InstanceT>
   class Parser {
   public:
-    explicit Parser(const std::stringstream & specification_sstream);
+    Parser();
 
+    void initializeParser(std::ifstream & specification_stream);
+
+    template<typename InstanceT>
     bool parse(const std::string & instance_file, InstanceT & output);
 
-    bool parseFromStringStream(const std::stringstream & instance_string, InstanceT & output);
+    template<typename InstanceT>
+    bool parseFromStream(std::ifstream & instance_string, InstanceT & output);
   };
 
   // How can we specify the instance before the specification is read?
   // answer: metaprogramming
-  template<typename InstanceT>
-  Parser<InstanceT> loadSpec(const std::string & specification_file);
+  Parser loadSpec(const std::string & specification_file);
 
   // In the form of a read file
-  template<typename InstanceT>
-  Parser<InstanceT> loadSpecFromStringStream(const std::stringstream & specification_string);
+  Parser loadSpecFromStream(std::ifstream & specification_string);
 }
 
 #endif  // WALLABY__HH_

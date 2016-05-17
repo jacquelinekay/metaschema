@@ -1,9 +1,9 @@
 #include <wallaby/wallaby.hh>
 
 int main() {
-  using InstanceT = void *;
+  using InstanceT = int;
   {
-    wallaby::Parser<InstanceT> test_parser = wallaby::loadSpec<InstanceT>("test/schema_test.wl");
+    wallaby::Parser test_parser = wallaby::loadSpec("test/schema_test.wl");
 
     InstanceT instance;
     bool success = test_parser.parse("test/instance_test.xml", instance);
@@ -11,7 +11,7 @@ int main() {
   }
 
   {
-    wallaby::Parser<InstanceT> test_parser = wallaby::loadSpec<InstanceT>("test/plugin_test.wl");
+    wallaby::Parser test_parser = wallaby::loadSpec("test/plugin_test.wl");
 
     // Typenames though
     InstanceT instance;
