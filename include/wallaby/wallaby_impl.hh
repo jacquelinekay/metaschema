@@ -18,6 +18,7 @@
 #include <boost/spirit/include/qi.hpp>
 #include <boost/spirit/include/qi_grammar.hpp>
 #include <boost/spirit/include/support_istream_iterator.hpp>
+#include <boost/spirit/include/support_multi_pass.hpp>
 
 #include <wallaby/types.hh>
 
@@ -37,11 +38,12 @@ BOOST_FUSION_ADAPT_STRUCT(
   wallaby::types::Element,
   (std::string, name)
   (wallaby::types::Requirement, requirement)
-  (std::vector<wallaby::types::Attribute *>, attributes)
-  (std::vector<wallaby::types::Element *>, children)
-  (wallaby::types::Element *, parent)
+  (std::vector<wallaby::types::Attribute>, attributes)
+  (std::vector<boost::recursive_wrapper<wallaby::types::Element>>, children)
+  (boost::recursive_wrapper<wallaby::types::Element>, parent)
 )
 
+namespace spirit = boost::spirit;
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
 namespace phoenix = boost::phoenix;
@@ -56,7 +58,8 @@ namespace wallaby {
     qi::rule<Iterator, types::Schema(), ascii::space_type> start;
     qi::rule<Iterator, types::Attribute(), ascii::space_type> attribute;
     qi::rule<Iterator, types::Element(), ascii::space_type> element;
-    qi::symbols<std::string, types::ValueType> type_;
+    qi::symbols<char, types::ValueType> type_;
+    qi::symbols<char, types::Requirement> requirement_;
 
     SchemaParser() : SchemaParser::base_type(start) {
       using qi::int_;
@@ -72,30 +75,36 @@ namespace wallaby {
 
       /* Valid keys are : int, double, string*/
       type_.add
-          (std::string("int"), types::ValueType::INT)
-          (std::string("double"), types::ValueType::DOUBLE)
-          (std::string("string"), types::ValueType::STRING);
+          ("int", types::ValueType::INT)
+          ("double", types::ValueType::DOUBLE)
+          ("string", types::ValueType::STRING);
+
+      requirement_.add
+          ("1", types::Requirement::ONE)
+          ("+", types::Requirement::ONE_OR_MORE)
+          ("?", types::Requirement::ZERO_OR_ONE)
+          ("*", types::Requirement::ZERO_OR_MORE);
 
       attribute = lit("{")
         // value_type must evaluate to 
-        >> "type: {" >> type_ >> "}"
-        >> "value: {" >> int_ | double_ | quoted_string >> "}"
+        >> "type: {" >> type_ [at_c<0>(_val) = qi::_1] >> "}"
+        >> "value: {" >> int_ | double_ | quoted_string [at_c<1>(_val) = qi::_1] >> "}"
         >> "}";
 
       element = lit("{")
-        >> "name: {" >> quoted_string >> "},"
-        >> "requirement: {" >> char_ >> "},"
-        >> "attributes: " >> *attribute [phoenix::push_back(at_c<2>(_val), &boost::spirit::qi::_1)]
-        >> "children: " >>  *element [phoenix::push_back(at_c<3>(_val), &boost::spirit::qi::_1)]
-        >> -("parent: " >> element)
+        >> "name: {" >> quoted_string [at_c<0>(_val) = qi::_1] >> "},"
+        >> "requirement: {" >> requirement_ [at_c<1>(_val) = qi::_1] >> "},"
+        >> "attributes: " >> *attribute [phoenix::push_back(at_c<2>(_val), qi::_1)]
+        >> "children: " >>  *element [phoenix::push_back(at_c<3>(_val), qi::_1)]
+        >> -("parent: " >> element [at_c<4>(_val) = qi::_1])
         >> "}";
 
       start =
         lit("schema")
         >> '{'
-        >> "name: {" >> quoted_string >> "},"
+        >> "name: {" >> quoted_string [at_c<0>(_val) = qi::_1] >> "},"
         >> "children:"
-        >>  '{' >> *element [phoenix::push_back(at_c<1>(_val), boost::spirit::qi::_1)] >> '}'
+        >>  '{' >> *element [phoenix::push_back(at_c<1>(_val), qi::_1)] >> '}'
         >>  '}';
 
     }
@@ -105,15 +114,23 @@ namespace wallaby {
   }
 
   void Parser::initializeParser(std::ifstream & specification_stream) {
-    boost::spirit::istream_iterator begin(specification_stream);
-    boost::spirit::istream_iterator end;
+
+    using BaseIteratorT = std::istreambuf_iterator<char>;
+    // boost::spirit::istream_iterator begin(specification_stream);
+
+    spirit::multi_pass<BaseIteratorT> begin = spirit::make_default_multi_pass(
+      BaseIteratorT(specification_stream));
     // Initialize grammar
     SchemaParser<decltype(begin)> parser;
-    wallaby::types::Schema result;
-    qi::parse(begin, end, parser, result);
+    wallaby::types::Schema schema;
+    // qi::parse(begin, end, parser, result);
+    bool result = qi::phrase_parse(begin,
+      spirit::make_default_multi_pass(BaseIteratorT()),
+      parser,
+      ascii::space,  //skipper
+      schema);
   }
 
-  // TODO: ## need to use metaprogramming to construct InstanceT's after parsing
   template<typename InstanceT>
   bool Parser::parse(const std::string & instance_file, InstanceT & output) {
     boost::filesystem::path instance_path(instance_file);

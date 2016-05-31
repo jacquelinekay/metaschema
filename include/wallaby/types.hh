@@ -30,9 +30,9 @@ namespace types {
   struct Element {
     std::string name;
     Requirement requirement;
-    std::vector<Attribute *> attributes;
-    std::vector<Element *> children;
-    Element * parent;
+    std::vector<Attribute> attributes;
+    std::vector<boost::recursive_wrapper<Element>> children;
+    boost::recursive_wrapper<Element> parent;
   };
 
   struct Schema {
