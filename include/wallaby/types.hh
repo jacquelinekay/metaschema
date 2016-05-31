@@ -17,7 +17,7 @@ namespace types {
     INT,    // int64_t or int32_t
     DOUBLE, // double
     STRING, // std::string
-    ELEMENT // std::vector<Element> representing children
+    // ELEMENT // std::vector<Element> representing children
   };
 
   using VariantT = boost::variant<int, double, std::string>;
